@@ -52,6 +52,8 @@ Environment:
                         persists cloned voices; reloaded at startup)
     VIENEU_BACKBONE=finetune/output/<run>/merged  (serve a fine-tuned model; GPU/PyTorch only)
     VIENEU_MAX_CHARS=256  (default text chunk length; ~120 suits a model fine-tuned on short clips)
+    VIENEU_PAUSE_SENTENCE=0.50 VIENEU_PAUSE_MINOR=0.30 VIENEU_PAUSE_PARA=0.70  (minimum pause
+                        where chunks are joined: after .!? / after ,;: / at a line break)
     VIENEU_EDU_NORMALIZE=1  (classroom text fixes: 12 : 4 -> chia, 1/2 -> một phần hai,
                         3,14 -> ba phẩy mười bốn, Roman numerals; per request: edu_normalize)
     VIENEU_WATERMARK=1                 HOST=127.0.0.1  PORT=8000
@@ -102,6 +104,25 @@ def _env_int(name: str, default: int) -> int:
         return default
 
 
+_PAUSE_ENV = (("sentence", "VIENEU_PAUSE_SENTENCE"), ("minor", "VIENEU_PAUSE_MINOR"), ("para", "VIENEU_PAUSE_PARA"))
+
+
+def _apply_pause_env() -> dict:
+    """Override the minimum pause (seconds) inserted where two text chunks are
+    joined. The SDK reads this table at call time; its defaults (0.50 / 0.30 /
+    0.70) are longer than the natural pauses of some voices, which shows as
+    slow pacing once text is split into short chunks."""
+    from vieneu_utils.core_utils import V3_GAP_SILENCE
+    for gap, var in _PAUSE_ENV:
+        raw = os.environ.get(var)
+        if raw:
+            try:
+                V3_GAP_SILENCE[gap] = min(2.0, max(0.0, float(raw)))
+            except ValueError:
+                log.warning("ignoring %s=%r (not a number)", var, raw)
+    return dict(V3_GAP_SILENCE)
+
+
 # ── engine + admission ───────────────────────────────────────────────────────
 
 class Engine:
@@ -118,6 +139,7 @@ class Engine:
         backbone = os.environ.get("VIENEU_BACKBONE")
         if backbone:
             kw["backbone_repo"] = backbone
+        log.info("⏸ pauses between chunks (s): %s", _apply_pause_env())
         log.info("⏳ loading VieNeu-TTS v3 Turbo (backend=%s device=%s model=%s)", backend, device,
                  backbone or "pnnbao-ump/VieNeu-TTS-v3-Turbo")
         t = time.perf_counter()

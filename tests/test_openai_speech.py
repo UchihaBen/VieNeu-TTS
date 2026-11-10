@@ -263,3 +263,15 @@ def test_max_chars_server_default(client, eng, monkeypatch):
     assert _speech(client, max_chars=200).status_code == 200      # explicit request wins
     assert eng.tts.stream_calls[-1]["max_chars"] == 200
     assert _speech(client, max_chars=10).status_code == 400
+
+
+def test_pause_env_overrides_join_pauses(monkeypatch):
+    import sys, types
+    table = {"para": 0.70, "sentence": 0.50, "minor": 0.30}
+    fake = types.ModuleType("vieneu_utils.core_utils")
+    fake.V3_GAP_SILENCE = table
+    monkeypatch.setitem(sys.modules, "vieneu_utils.core_utils", fake)
+    monkeypatch.setenv("VIENEU_PAUSE_SENTENCE", "0.3")
+    monkeypatch.setenv("VIENEU_PAUSE_MINOR", "abc")          # ignored
+    monkeypatch.setenv("VIENEU_PAUSE_PARA", "9")             # clamped
+    assert api._apply_pause_env() == {"para": 2.0, "sentence": 0.3, "minor": 0.30}

@@ -40,6 +40,8 @@ Một số biến môi trường hay dùng:
 | `VIENEU_MAX_STREAMS` | `16` | Số request chạy song song trên GPU |
 | `VIENEU_VOICES_FILE` | `voices/custom_voices.json` | Nơi lưu giọng clone |
 | `VIENEU_BACKBONE` | (model gốc) | Thư mục model đã fine-tune, ví dụ `finetune/output/ban_mai_v1/merged` (chỉ chạy GPU) |
+| `VIENEU_MAX_CHARS` | `256` | Độ dài đoạn văn bản mỗi lượt đọc. Model fine-tune chỉ học câu ngắn thì để ~120 |
+| `VIENEU_PAUSE_SENTENCE` / `_MINOR` / `_PARA` | `0.50` / `0.30` / `0.70` | Khoảng nghỉ tối thiểu (giây) khi ghép hai đoạn: hết câu / dấu phẩy / xuống dòng |
 | `VIENEU_EDU_NORMALIZE` | `1` | Chuẩn hoá chữ cho lớp học: `12 : 4` → chia, `1/2` → một phần hai, `3,14` → ba phẩy mười bốn, số La Mã. Tắt từng request bằng `"edu_normalize": false` |
 | `VIENEU_WATERMARK` | `1` | `0` để tắt watermark âm thanh |
 
