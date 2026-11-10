@@ -64,7 +64,8 @@ def main() -> None:
     ap.add_argument("--metadata", default=None, help="default: <dataset-dir>/metadata.csv")
     ap.add_argument("--model", default="openai/whisper-large-v3-turbo")
     ap.add_argument("--max-wer", type=float, default=0.10)
-    ap.add_argument("--batch-size", type=int, default=8)
+    ap.add_argument("--batch-size", type=int, default=1,
+                    help="clips per Whisper call; >1 is faster but padding can make Whisper hallucinate")
     ap.add_argument("--write-clean", action="store_true")
     ap.add_argument("--exclude-prefix", action="append", default=[],
                     help="skip clips whose file name starts with this (they stay in the clean list), "

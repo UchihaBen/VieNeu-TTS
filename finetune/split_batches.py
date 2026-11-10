@@ -101,9 +101,12 @@ def cut_points(ref_sents: list[list[str]], hyp: list[tuple[str, float, float]]):
     for sent in ref_sents[:-1]:
         last, first = pos + len(sent) - 1, pos + len(sent)
         pos += len(sent)
-        # the boundary words themselves (or their direct neighbours) must be matched
-        a = next((r2h[i] for i in (last, last - 1) if i in r2h), None)
-        b = next((r2h[i] for i in (first, first + 1) if i in r2h), None)
+        # the nearest matched words on each side of the boundary (within each prompt);
+        # the cut goes at the quietest point between them, and
+        # check_dataset.py then verifies every resulting clip
+        nxt = len(ref_sents[len(cuts) + 1])
+        a = next((r2h[i] for i in range(last, last - len(sent), -1) if i in r2h), None)
+        b = next((r2h[i] for i in range(first, first + nxt) if i in r2h), None)
         if a is None or b is None or b <= a:
             return None
         cuts.append((hyp[a][2], hyp[b][1]))
