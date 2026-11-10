@@ -51,6 +51,7 @@ Environment:
     VIENEU_VOICES_FILE=voices/custom_voices.json  (where POST /v1/voices
                         persists cloned voices; reloaded at startup)
     VIENEU_BACKBONE=finetune/output/<run>/merged  (serve a fine-tuned model; GPU/PyTorch only)
+    VIENEU_MAX_CHARS=256  (default text chunk length; ~120 suits a model fine-tuned on short clips)
     VIENEU_EDU_NORMALIZE=1  (classroom text fixes: 12 : 4 -> chia, 1/2 -> một phần hai,
                         3,14 -> ba phẩy mười bốn, Roman numerals; per request: edu_normalize)
     VIENEU_WATERMARK=1                 HOST=127.0.0.1  PORT=8000
@@ -389,9 +390,17 @@ class SpeechRequest(BaseModel):
     top_k: int = Field(25, ge=1, le=1024)   # 1024 = the codec's vocabulary
     top_p: float = Field(0.95, gt=0.0, le=1.0, allow_inf_nan=False)
     repetition_penalty: float = Field(1.2, ge=1.0, le=2.0, allow_inf_nan=False)
-    max_chars: int = Field(256, ge=64, le=512)
+    # None = server default (VIENEU_MAX_CHARS, else 256). A model fine-tuned on short clips
+    # reads best (and stops cleanly) when chunks stay close to its training length.
+    max_chars: Optional[int] = Field(None, ge=64, le=512)
     # Classroom text fixes (apps/edu_text.py); None = server default (VIENEU_EDU_NORMALIZE).
     edu_normalize: Optional[bool] = None
+
+
+def _max_chars(req: "SpeechRequest") -> int:
+    if req.max_chars is not None:
+        return req.max_chars
+    return min(512, max(64, _env_int("VIENEU_MAX_CHARS", 256)))
 
 
 def _speech_chunks(eng: Engine, req: SpeechRequest, rid: str, slot: _Slot) -> Iterator[np.ndarray]:
@@ -405,7 +414,7 @@ def _speech_chunks(eng: Engine, req: SpeechRequest, rid: str, slot: _Slot) -> It
     audio = eng.tts.infer_stream(
         text, voice=req.voice or None, apply_watermark=eng.watermark,
         temperature=req.temperature, top_k=req.top_k, top_p=req.top_p,
-        repetition_penalty=req.repetition_penalty, max_chars=req.max_chars,
+        repetition_penalty=req.repetition_penalty, max_chars=_max_chars(req),
     )
     try:
         for chunk in audio:

@@ -251,3 +251,15 @@ def test_backbone_env_selects_finetuned_model(monkeypatch):
     seen.clear()
     api.Engine()
     assert "backbone_repo" not in seen
+
+
+def test_max_chars_server_default(client, eng, monkeypatch):
+    monkeypatch.delenv("VIENEU_MAX_CHARS", raising=False)
+    assert _speech(client).status_code == 200
+    assert eng.tts.stream_calls[-1]["max_chars"] == 256
+    monkeypatch.setenv("VIENEU_MAX_CHARS", "120")
+    assert _speech(client).status_code == 200
+    assert eng.tts.stream_calls[-1]["max_chars"] == 120
+    assert _speech(client, max_chars=200).status_code == 200      # explicit request wins
+    assert eng.tts.stream_calls[-1]["max_chars"] == 200
+    assert _speech(client, max_chars=10).status_code == 400

@@ -33,6 +33,7 @@ audio{width:100%;margin-top:12px}a{color:var(--acc)}details summary{cursor:point
       <div><label for="topk">Top-k (1–1024)</label><input id="topk" type="number" min="1" max="1024" step="1" value="25"></div>
       <div><label for="topp">Top-p (0–1)</label><input id="topp" type="number" min="0.05" max="1" step="0.05" value="0.95"></div>
       <div><label for="rep">Repetition penalty (1–2)</label><input id="rep" type="number" min="1" max="2" step="0.05" value="1.2"></div>
+      <div><label for="mc">Độ dài đoạn tối đa (64–512, trống = mặc định server)</label><input id="mc" type="number" min="64" max="512" step="8" placeholder="mặc định"></div>
     </div>
   </details>
   <button id="go">Tạo giọng nói</button>
@@ -95,7 +96,7 @@ $('go').onclick = async () => {
   try {
     const r = await fetch('/v1/audio/speech', {method: 'POST', headers: {...auth(), 'Content-Type': 'application/json'},
       body: JSON.stringify({input: text, voice: $('voice').value || null, response_format: 'pcm',
-        temperature: +$('temp').value, top_k: +$('topk').value, top_p: +$('topp').value, repetition_penalty: +$('rep').value})});
+        temperature: +$('temp').value, top_k: +$('topk').value, top_p: +$('topp').value, repetition_penalty: +$('rep').value, max_chars: $('mc').value ? +$('mc').value : null})});
     if (!r.ok) throw new Error(await errText(r));
     const rate = +(r.headers.get('X-Sample-Rate') || 48000);
     const pcm = await r.arrayBuffer();
