@@ -48,6 +48,8 @@ Environment:
     VIENEU_MAX_STREAMS=16 (GPU)        VIENEU_QUEUE=16   VIENEU_QUEUE_TIMEOUT=10
     VIENEU_API_KEY=...  (Bearer auth; unset = open — logged as a warning when
                         HOST is not a loopback address)
+    VIENEU_VOICES_FILE=voices/custom_voices.json  (where POST /v1/voices
+                        persists cloned voices; reloaded at startup)
     VIENEU_WATERMARK=1                 HOST=127.0.0.1  PORT=8000
                                        (HOST=0.0.0.0 to serve other machines; the
                                        Docker profiles set it)
@@ -74,7 +76,7 @@ import numpy as np
 import uvicorn
 from fastapi import Depends, FastAPI, File, Form, Header, HTTPException, Request, UploadFile
 from fastapi.exceptions import RequestValidationError
-from fastapi.responses import JSONResponse, StreamingResponse
+from fastapi.responses import HTMLResponse, JSONResponse, StreamingResponse
 from pydantic import BaseModel, Field
 
 from vieneu import Vieneu
@@ -113,6 +115,11 @@ class Engine:
         # The voices and aliases that exist before any client enrolls one;
         # POST /v1/voices may not replace them.
         self.builtin_voices = frozenset(self.tts._preset_voices) | frozenset(self.tts._voice_aliases)
+        # Cloned voices live in their own file, not in the package's voices JSON
+        # (tracked by git), so a server restart keeps them and `git pull` stays clean.
+        self.voices_file = os.environ.get("VIENEU_VOICES_FILE") or os.path.join("voices", "custom_voices.json")
+        self._voices_lock = threading.Lock()
+        self._load_custom_voices()
         self.watermark = os.environ.get("VIENEU_WATERMARK", "1") != "0"
         # GPU: the scheduler batches every stream. CPU: the ONNX engine interleaves
         # calls frame by frame, but they share the cores — measured on a 6-core
@@ -167,8 +174,60 @@ class Engine:
         for name, v in self.tts._preset_voices.items():
             out.append({"id": name, "name": name, "description": v.get("description", ""),
                         "gender": v.get("gender", ""), "featured": v.get("featured"),
-                        "aliases": list(v.get("aliases") or [])})
+                        "aliases": list(v.get("aliases") or []),
+                        "custom": name not in self.builtin_voices})
         return out
+
+    # ── cloned voices on disk ────────────────────────────────────────────────
+
+    def custom_voice_names(self) -> list:
+        return [n for n in self.tts._preset_voices if n not in self.builtin_voices]
+
+    def _load_custom_voices(self) -> None:
+        if not os.path.isfile(self.voices_file):
+            return
+        try:
+            with open(self.voices_file, encoding="utf-8") as f:
+                data = json.load(f)
+        except Exception as e:   # noqa: BLE001 — a bad file must not stop the server
+            log.warning("ignoring unreadable voices file %s: %s", self.voices_file, e)
+            return
+        n = 0
+        for name, v in (data.get("voices") or {}).items():
+            if (name in self.builtin_voices or not _VOICE_NAME.fullmatch(name)
+                    or not isinstance(v, dict) or v.get("speaker_emb") is None):
+                continue
+            codes = v.get("codes")
+            self.tts._preset_voices[name] = {
+                "description": v.get("description", ""),
+                "gender": "",
+                "style": getattr(self.tts, "default_style", None),
+                "speaker_emb": np.asarray(v["speaker_emb"], dtype=np.float32),
+                "codes": None if codes is None else np.asarray(codes, dtype=np.int64),
+            }
+            n += 1
+        log.info("📂 loaded %d cloned voice(s) from %s", n, self.voices_file)
+
+    def save_custom_voices(self) -> None:
+        with self._voices_lock:
+            out = {}
+            for name in self.custom_voice_names():
+                v = self.tts._preset_voices.get(name) or {}
+                emb = v.get("speaker_emb")
+                if emb is None:
+                    continue
+                codes = v.get("codes")
+                out[name] = {
+                    "description": v.get("description", ""),
+                    "speaker_emb": [round(float(x), 6) for x in np.asarray(emb).reshape(-1)],
+                    "codes": None if codes is None else np.asarray(codes, dtype=int).tolist(),
+                }
+            folder = os.path.dirname(os.path.abspath(self.voices_file))
+            os.makedirs(folder, exist_ok=True)
+            tmp = self.voices_file + ".tmp"
+            with open(tmp, "w", encoding="utf-8") as f:
+                json.dump({"voices": out}, f, ensure_ascii=False)
+            os.replace(tmp, self.voices_file)
 
 
 class _Slot:
@@ -472,7 +531,36 @@ def add_voice(name: str = Form(...), file: UploadFile = File(...), denoise: bool
         raise HTTPException(400, f"could not enroll voice: {e}")
     finally:
         os.unlink(path)
-    return {"id": name, "name": name, "description": description}
+    saved = True
+    try:
+        eng.save_custom_voices()
+    except Exception as e:   # noqa: BLE001 — the voice still works for this process
+        log.warning("could not persist voice '%s' to %s: %s", name, eng.voices_file, e)
+        saved = False
+    return {"id": name, "name": name, "description": description, "saved": saved}
+
+
+@app.delete("/v1/voices/{name}", dependencies=[Depends(_auth)])
+def delete_voice(name: str):
+    """Remove a voice added with POST /v1/voices (built-in voices cannot be removed)."""
+    eng = engine()
+    if name in eng.builtin_voices:
+        raise HTTPException(409, f"'{name}' is a built-in voice and cannot be deleted")
+    if name not in eng.custom_voice_names():
+        raise HTTPException(404, f"no cloned voice named '{name}'")
+    eng.tts._preset_voices.pop(name, None)
+    eng.save_custom_voices()
+    return {"id": name, "deleted": True}
+
+
+_TEST_PAGE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "speech_test.html")
+
+
+@app.get("/", response_class=HTMLResponse, include_in_schema=False)
+def test_page():
+    """Browser page to try the API (it asks for the API key itself)."""
+    with open(_TEST_PAGE, encoding="utf-8") as f:
+        return f.read()
 
 
 @app.get("/health")

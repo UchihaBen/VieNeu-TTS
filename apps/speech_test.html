@@ -1,0 +1,134 @@
+<!doctype html>
+<html lang="vi"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>VieNeu-TTS API</title>
+<style>
+:root{--bg:#f6f7f9;--card:#fff;--fg:#1b1f24;--muted:#5f6b7a;--line:#d9dee5;--acc:#2563eb;--err:#b42318;--ok:#067647}
+@media (prefers-color-scheme:dark){:root{--bg:#0f1115;--card:#171a21;--fg:#e6e9ee;--muted:#9aa4b2;--line:#2a2f3a;--acc:#6ea0ff;--err:#ff8a80;--ok:#6ce9a6}}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--fg);font:15px/1.5 system-ui,sans-serif}
+main{max-width:760px;margin:0 auto;padding:24px 16px}h1{font-size:20px;margin:0 0 4px}h2{font-size:15px;margin:0 0 8px}
+.sub{color:var(--muted);margin:0 0 20px}.card{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:16px;margin-bottom:16px}
+label{display:block;font-size:13px;color:var(--muted);margin:10px 0 4px}
+textarea,input,select{width:100%;padding:8px 10px;border:1px solid var(--line);border-radius:6px;background:var(--bg);color:var(--fg);font:inherit}
+textarea{min-height:130px;resize:vertical}.row{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px}
+button{margin-top:14px;padding:10px 18px;border:0;border-radius:6px;background:var(--acc);color:#fff;font:inherit;font-weight:600;cursor:pointer}
+button.ghost{background:transparent;color:var(--err);border:1px solid var(--line);padding:8px 12px;font-weight:500}
+button:disabled{opacity:.6;cursor:wait}.status{margin-top:10px;color:var(--muted)}.status.err{color:var(--err)}.status.ok{color:var(--ok)}
+audio{width:100%;margin-top:12px}a{color:var(--acc)}details summary{cursor:pointer;color:var(--muted);font-size:13px;margin-top:12px}
+</style></head><body><main>
+<h1>VieNeu-TTS API</h1><p class="sub">Trang nghe thử. Tài liệu API: <a href="/docs">/docs</a></p>
+
+<div class="card">
+  <label for="key">API key (nếu server có đặt VIENEU_API_KEY)</label>
+  <input id="key" type="password" autocomplete="off" placeholder="dán key rồi bấm ra ngoài">
+</div>
+
+<div class="card">
+  <h2>Tạo giọng nói</h2>
+  <label for="text">Văn bản</label>
+  <textarea id="text">Xin chào! Đây là bản thử giọng đọc tiếng Việt của VieNeu TTS.</textarea>
+  <label for="voice">Giọng</label><select id="voice"></select>
+  <details><summary>Tuỳ chỉnh nâng cao</summary>
+    <div class="row">
+      <div><label for="temp">Temperature (0–2)</label><input id="temp" type="number" min="0" max="2" step="0.05" value="0.8"></div>
+      <div><label for="topk">Top-k (1–1024)</label><input id="topk" type="number" min="1" max="1024" step="1" value="25"></div>
+      <div><label for="topp">Top-p (0–1)</label><input id="topp" type="number" min="0.05" max="1" step="0.05" value="0.95"></div>
+      <div><label for="rep">Repetition penalty (1–2)</label><input id="rep" type="number" min="1" max="2" step="0.05" value="1.2"></div>
+    </div>
+  </details>
+  <button id="go">Tạo giọng nói</button>
+  <div id="status" class="status"></div>
+  <audio id="player" controls hidden></audio><div id="dl"></div>
+</div>
+
+<div class="card">
+  <h2>Nhân bản giọng (clone)</h2>
+  <p class="sub" style="margin:0">Tải lên một đoạn 3–8 giây, giọng sạch, chỉ một người nói. Giọng được lưu lại trên server.</p>
+  <div class="row">
+    <div><label for="cname">Tên giọng</label><input id="cname" placeholder="vd: Giong Cua Toi"></div>
+    <div><label for="cfile">File audio</label><input id="cfile" type="file" accept="audio/*"></div>
+  </div>
+  <button id="clone">Thêm giọng</button>
+  <button id="del" class="ghost">Xoá giọng đang chọn</button>
+  <div id="cstatus" class="status"></div>
+</div>
+</main>
+<script>
+const $ = id => document.getElementById(id);
+const store = {get: k => { try { return localStorage.getItem(k) } catch (e) { return null } },
+               set: (k, v) => { try { localStorage.setItem(k, v) } catch (e) {} }};
+$('key').value = store.get('vieneu_key') || '';
+const auth = () => { const k = $('key').value.trim(); return k ? {Authorization: 'Bearer ' + k} : {} };
+const esc = s => String(s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+function say(el, text, cls) { el.textContent = text; el.className = 'status' + (cls ? ' ' + cls : '') }
+async function errText(r) { const t = await r.text(); try { return JSON.parse(t).error.message } catch (e) { return t || r.status } }
+
+let customVoices = new Set();
+async function loadVoices(select) {
+  const r = await fetch('/v1/voices', {headers: auth()});
+  if (!r.ok) { say($('status'), 'Không tải được danh sách giọng: ' + await errText(r), 'err'); return }
+  const list = (await r.json()).data;
+  customVoices = new Set(list.filter(v => v.custom).map(v => v.name));
+  list.sort((a, b) => (b.custom - a.custom) || ((a.featured || 999) - (b.featured || 999)) || a.name.localeCompare(b.name));
+  $('voice').innerHTML = list.map(v => {
+    const extra = v.custom ? 'giọng của bạn' : [v.gender, v.description].filter(Boolean).join(' · ');
+    return `<option value="${esc(v.name)}">${esc(v.name)}${extra ? ' (' + esc(extra) + ')' : ''}</option>`;
+  }).join('');
+  if (select) $('voice').value = select;
+  say($('status'), '');
+}
+
+// PCM s16le -> a WAV with correct sizes (plays and seeks everywhere).
+function pcmToWav(pcm, rate) {
+  const h = new DataView(new ArrayBuffer(44)); const w = (o, s) => [...s].forEach((c, i) => h.setUint8(o + i, c.charCodeAt(0)));
+  w(0, 'RIFF'); h.setUint32(4, 36 + pcm.byteLength, true); w(8, 'WAVE'); w(12, 'fmt ');
+  h.setUint32(16, 16, true); h.setUint16(20, 1, true); h.setUint16(22, 1, true); h.setUint32(24, rate, true);
+  h.setUint32(28, rate * 2, true); h.setUint16(32, 2, true); h.setUint16(34, 16, true); w(36, 'data'); h.setUint32(40, pcm.byteLength, true);
+  return new Blob([h.buffer, pcm], {type: 'audio/wav'});
+}
+
+$('key').onchange = () => { store.set('vieneu_key', $('key').value.trim()); loadVoices() };
+
+$('go').onclick = async () => {
+  const text = $('text').value.trim();
+  if (!text) { say($('status'), 'Hãy nhập văn bản.', 'err'); return }
+  $('go').disabled = true; say($('status'), 'Đang tạo…'); const t0 = performance.now();
+  try {
+    const r = await fetch('/v1/audio/speech', {method: 'POST', headers: {...auth(), 'Content-Type': 'application/json'},
+      body: JSON.stringify({input: text, voice: $('voice').value || null, response_format: 'pcm',
+        temperature: +$('temp').value, top_k: +$('topk').value, top_p: +$('topp').value, repetition_penalty: +$('rep').value})});
+    if (!r.ok) throw new Error(await errText(r));
+    const rate = +(r.headers.get('X-Sample-Rate') || 48000);
+    const pcm = await r.arrayBuffer();
+    const url = URL.createObjectURL(pcmToWav(pcm, rate));
+    $('player').src = url; $('player').hidden = false; $('player').play().catch(() => {});
+    $('dl').innerHTML = `<a href="${url}" download="vieneu.wav">Tải file WAV</a>`;
+    const secs = (performance.now() - t0) / 1000, dur = pcm.byteLength / 2 / rate;
+    say($('status'), `Xong sau ${secs.toFixed(1)} giây · audio dài ${dur.toFixed(1)} giây`, 'ok');
+  } catch (e) { say($('status'), 'Lỗi: ' + e.message, 'err') } finally { $('go').disabled = false }
+};
+
+$('clone').onclick = async () => {
+  const name = $('cname').value.trim(), file = $('cfile').files[0];
+  if (!name || !file) { say($('cstatus'), 'Cần nhập tên và chọn file audio.', 'err'); return }
+  const f = new FormData(); f.append('name', name); f.append('file', file);
+  $('clone').disabled = true; say($('cstatus'), 'Đang xử lý giọng…');
+  try {
+    const r = await fetch('/v1/voices', {method: 'POST', headers: auth(), body: f});
+    if (!r.ok) throw new Error(await errText(r));
+    const d = await r.json();
+    await loadVoices(name);
+    say($('cstatus'), `Đã thêm giọng "${name}"` + (d.saved === false ? ' (chưa lưu được ra đĩa, sẽ mất khi khởi động lại)' : '') + '. Đã chọn sẵn ở trên.', 'ok');
+  } catch (e) { say($('cstatus'), 'Lỗi: ' + e.message, 'err') } finally { $('clone').disabled = false }
+};
+
+$('del').onclick = async () => {
+  const name = $('voice').value;
+  if (!customVoices.has(name)) { say($('cstatus'), 'Chỉ xoá được giọng bạn đã thêm, không xoá được giọng có sẵn.', 'err'); return }
+  if (!confirm(`Xoá giọng "${name}"?`)) return;
+  const r = await fetch('/v1/voices/' + encodeURIComponent(name), {method: 'DELETE', headers: auth()});
+  if (!r.ok) { say($('cstatus'), 'Lỗi: ' + await errText(r), 'err'); return }
+  await loadVoices(); say($('cstatus'), `Đã xoá giọng "${name}".`, 'ok');
+};
+
+loadVoices();
+</script></body></html>

@@ -40,13 +40,16 @@ class FakeTTS:
 
     def add_voice(self, name, path, **kw):
         self.enrolled.append(name)
-        self._preset_voices[name] = {}
+        self._preset_voices[name] = {"description": kw.get("description", ""),
+                                     "speaker_emb": np.full(4, 0.5, dtype=np.float32),
+                                     "codes": np.arange(6, dtype=np.int64).reshape(2, 3)}
 
 
 @pytest.fixture
-def eng(monkeypatch):
+def eng(monkeypatch, tmp_path):
     for var in ("VIENEU_API_KEY", "VIENEU_MAX_STREAMS", "VIENEU_QUEUE"):
         monkeypatch.delenv(var, raising=False)
+    monkeypatch.setenv("VIENEU_VOICES_FILE", str(tmp_path / "voices" / "custom_voices.json"))
     monkeypatch.setattr(api, "Vieneu", lambda **kw: FakeTTS())
     e = api.Engine()
     monkeypatch.setattr(api, "ENGINE", e)
@@ -153,6 +156,40 @@ def test_new_voice_is_enrolled(client, eng):
                     files={"file": ("me.wav", b"RIFF", "audio/wav")})
     assert r.status_code == 200
     assert eng.tts.enrolled == ["Giọng của tôi"]
+
+
+def test_cloned_voice_survives_restart(client, eng, monkeypatch):
+    r = client.post("/v1/voices", data={"name": "Giọng của tôi"},
+                    files={"file": ("me.wav", b"RIFF", "audio/wav")})
+    assert r.status_code == 200 and r.json()["saved"] is True
+    listed = {v["name"]: v["custom"] for v in client.get("/v1/voices").json()["data"]}
+    assert listed["Giọng của tôi"] is True and listed["Mai Anh"] is False
+
+    restarted = api.Engine()                 # same VIENEU_VOICES_FILE, fresh model
+    v = restarted.tts._preset_voices["Giọng của tôi"]
+    assert np.allclose(v["speaker_emb"], 0.5) and v["codes"].shape == (2, 3)
+    assert "Giọng của tôi" not in restarted.builtin_voices
+
+
+def test_delete_cloned_voice(client, eng):
+    client.post("/v1/voices", data={"name": "tam"}, files={"file": ("a.wav", b"RIFF", "audio/wav")})
+    assert client.delete("/v1/voices/tam").status_code == 200
+    assert "tam" not in eng.tts._preset_voices
+    assert "tam" not in api.Engine().tts._preset_voices      # gone from disk too
+    assert client.delete("/v1/voices/tam").status_code == 404
+    assert client.delete("/v1/voices/Mai Anh").status_code == 409
+
+
+def test_unreadable_voices_file_is_ignored(eng, monkeypatch, tmp_path):
+    bad = tmp_path / "bad.json"
+    bad.write_text("{not json", encoding="utf-8")
+    monkeypatch.setenv("VIENEU_VOICES_FILE", str(bad))
+    assert set(api.Engine().tts._preset_voices) == {"Hải Đăng", "Mai Anh"}
+
+
+def test_test_page_is_served(client):
+    r = client.get("/")
+    assert r.status_code == 200 and "/v1/audio/speech" in r.text
 
 
 def test_dead_scheduler_fails_health_and_new_requests(client, eng):

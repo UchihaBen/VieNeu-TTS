@@ -19,3 +19,6 @@ finetune/output/
 
 # Merged Models
 merged_models_cache/
+
+# Cloned voices saved by apps/openai_speech.py
+voices/
