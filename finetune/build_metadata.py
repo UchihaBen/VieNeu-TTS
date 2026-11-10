@@ -70,6 +70,9 @@ def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--prompts", default=str(ROOT / "finetune" / "prompts" / "cau_mau_vi.txt"))
     ap.add_argument("--audio-dir", default=str(ROOT / "finetune" / "dataset" / "raw_audio"))
+    ap.add_argument("--extra", nargs=2, action="append", default=[], metavar=("PROMPTS", "PREFIX"),
+                    help="another prompt list whose clips are named <PREFIX>0001.*, e.g. "
+                         "--extra finetune/prompts/danh_van_vi.txt dv_ (repeatable)")
     ap.add_argument("--out", default=str(ROOT / "finetune" / "dataset" / "metadata.csv"))
     ap.add_argument("--min-sec", type=float, default=3.0)
     ap.add_argument("--max-sec", type=float, default=15.0)
@@ -80,10 +83,13 @@ def main() -> None:
     except Exception:
         pass
 
-    prompts = read_prompts(Path(args.prompts))
+    sets = [(Path(args.prompts), "")] + [(Path(p), pre) for p, pre in args.extra]
+    items = []   # (file stem, text)
+    for path, prefix in sets:
+        items += [(f"{prefix}{i:04d}", t) for i, t in enumerate(read_prompts(path), 1)]
     if args.list:
-        for i, text in enumerate(prompts, 1):
-            print(f"{i:04d}\t{text}")
+        for stem, text in items:
+            print(f"{stem}\t{text}")
         return
 
     audio_dir = Path(args.audio_dir)
@@ -92,8 +98,7 @@ def main() -> None:
 
     rows, missing, too_short, too_long, unreadable = [], [], [], [], []
     total = 0.0
-    for i, text in enumerate(prompts, 1):
-        stem = f"{i:04d}"
+    for stem, text in items:
         path = find_audio(audio_dir, stem)
         if path is None:
             missing.append(stem)
@@ -115,7 +120,7 @@ def main() -> None:
     out.parent.mkdir(parents=True, exist_ok=True)
     out.write_text("file_name|text\n" + "\n".join(rows) + ("\n" if rows else ""), encoding="utf-8")
 
-    print(f"prompts: {len(prompts)}   usable clips: {len(rows)}   total: {total / 60:.1f} min")
+    print(f"prompts: {len(items)}   usable clips: {len(rows)}   total: {total / 60:.1f} min")
     for label, items in (("missing audio", missing), (f"shorter than {args.min_sec:g}s", too_short),
                          (f"longer than {args.max_sec:g}s", too_long), ("unreadable", unreadable)):
         if items:

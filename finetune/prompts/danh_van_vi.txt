@@ -1,0 +1,123 @@
+# Đánh vần kiểu SGK, viết đúng như cách đọc (không để chữ cái đứng riêng như ă, â, gh).
+# Mỗi dòng 2 lượt đánh vần để clip dài 3–15 giây.
+bờ, a, ba. bờ, a, ba, huyền, bà.
+cờ, a, ca. cờ, a, ca, sắc, cá.
+bờ, ê, bê. bờ, ê, bê, hỏi, bể.
+lờ, a, la. lờ, a, la, ngã, lã.
+mờ, e, me. mờ, e, me, nặng, mẹ.
+hờ, ô, hô. hờ, ô, hô, huyền, hồ.
+nờ, o, no. nờ, o, no, sắc, nó.
+tờ, ơ, tơ. tờ, ơ, tơ, sắc, tớ.
+dờ, ê, dê. dờ, u, du, huyền, dù.
+đờ, ô, đô. đờ, ô, đô, huyền, đồ.
+vờ, ơ, vơ. vờ, ơ, vơ, nặng, vợ.
+xờ, e, xe. xờ, ô, xô, sắc, xố.
+chờ, a, cha. chờ, i, chi, nặng, chị.
+khờ, ê, khê. khờ, i, khi, hỏi, khỉ.
+thờ, ơ, thơ. thờ, o, tho, hỏi, thỏ.
+trờ, e, tre. trờ, a, tra, huyền, trà.
+phờ, a, pha. phờ, ô, phô, sắc, phố.
+nhờ, o, nho. nhờ, a, nha, huyền, nhà.
+ngờ, ô, ngô. ngờ, a, nga, huyền, ngà.
+ngờ, i, nghi. ngờ, i, nghi, ngã, nghĩ.
+ngờ, ê, nghê. ngờ, ê, nghê, huyền, nghề.
+gờ, a, ga. gờ, a, ga, huyền, gà.
+gờ, i, ghi. gờ, ê, ghê, sắc, ghế.
+gờ, ô, gô. gờ, ô, gô, ngã, gỗ.
+di, a, gia. di, o, gio, sắc, gió.
+ca, e, ke. ca, e, ke, hỏi, kẻ.
+ca, ê, kê. ca, i, ki, sắc, kí.
+quờ, a, qua. quờ, ê, quê.
+rờ, a, ra. rờ, ô, rô, hỏi, rổ.
+sờ, ư, sư. sờ, ô, sô, sắc, số.
+hờ, o, ho. hờ, e, he, huyền, hè.
+lờ, ê, lê. lờ, ê, lê, nặng, lệ.
+mờ, ơ, mơ. mờ, a, ma, sắc, má.
+tờ, ô, tô. tờ, u, tu, sắc, tú.
+bờ, ô, bô. bờ, ô, bô, sắc, bố.
+cờ, ô, cô. cờ, o, co, hỏi, cỏ.
+đờ, a, đa. đờ, ê, đê, sắc, đế.
+nờ, ơ, nơ. nờ, a, na, sắc, ná.
+vờ, e, ve. vờ, o, vo, hỏi, vỏ.
+xờ, a, xa. xờ, u, xu, sắc, xú.
+sờ, ơ, sơ. sờ, a, sa, huyền, sà.
+tờ, a, ta. tờ, a, ta, nặng, tạ.
+mờ, u, mu. mờ, ư, mư, nặng, mự.
+lờ, o, lo. lờ, o, lo, sắc, ló.
+pờ, i, pi. phờ, i, phi, sắc, phí.
+a, nờ, an. bờ, an, ban.
+á, nờ, ăn. cờ, ăn, căn.
+ớ, nờ, ân. cờ, ân, cân.
+o, nờ, on. cờ, on, con.
+ô, nờ, ôn. thờ, ôn, thôn.
+ơ, nờ, ơn. sờ, ơn, sơn.
+e, nờ, en. sờ, en, sen.
+ê, nờ, ên. tờ, ên, tên.
+i, nờ, in. tờ, in, tin.
+u, nờ, un. phờ, un, phun.
+a, mờ, am. cờ, am, cam.
+á, mờ, ăm. chờ, ăm, chăm.
+ớ, mờ, âm. tờ, âm, tâm.
+o, mờ, om. khờ, om, khom.
+ô, mờ, ôm. tờ, ôm, tôm.
+ơ, mờ, ơm. cờ, ơm, cơm.
+e, mờ, em. cờ, em, kem.
+ê, mờ, êm. đờ, êm, đêm.
+i, mờ, im. chờ, im, chim.
+u, mờ, um. chờ, um, chum.
+a, ngờ, ang. bờ, ang, bang.
+á, ngờ, ăng. bờ, ăng, băng.
+ớ, ngờ, âng. tờ, âng, tâng.
+o, ngờ, ong. cờ, ong, cong.
+ô, ngờ, ông. sờ, ông, sông.
+u, ngờ, ung. cờ, ung, cung.
+ư, ngờ, ưng. lờ, ưng, lưng.
+nờ, ăng, năng. nờ, ăng, năng, sắc, nắng.
+a, nhờ, anh. xờ, anh, xanh.
+ê, nhờ, ênh. cờ, ênh, kênh.
+i, nhờ, inh. xờ, inh, xinh.
+a, i, ai. hờ, ai, hai.
+o, i, oi. cờ, oi, coi.
+ô, i, ôi. đờ, ôi, đôi.
+ơ, i, ơi. bờ, ơi, bơi.
+u, i, ui. vờ, ui, vui.
+ư, i, ưi. gờ, ưi, gưi, hỏi, gửi.
+a, i, ay. mờ, ay, may.
+ớ, i, ây. cờ, ây, cây.
+a, o, ao. sờ, ao, sao.
+e, o, eo. mờ, eo, meo.
+a, u, au. rờ, au, rau.
+ớ, u, âu. trờ, âu, trâu.
+ê, u, êu. cờ, êu, kêu.
+i, u, iu. rờ, iu, riu.
+ư, u, ưu. hờ, ưu, hưu.
+i, a, ia. chờ, ia, chia.
+u, a, ua. mờ, ua, mua.
+ư, a, ưa. mờ, ưa, mưa.
+o, a, oa. hờ, oa, hoa.
+o, e, oe. lờ, oe, loe.
+u, ê, uê. hờ, uê, huê.
+u, i, uy. tờ, uy, tuy.
+i, ê, nờ, iên. tờ, iên, tiên.
+i, ê, mờ, iêm. tờ, iêm, tiêm.
+i, ê, ngờ, iêng. chờ, iêng, chiêng.
+u, ô, nờ, uôn. mờ, uôn, muôn.
+u, ô, ngờ, uông. chờ, uông, chuông.
+ư, ơ, nờ, ươn. vờ, ươn, vươn.
+ư, ơ, ngờ, ương. hờ, ương, hương.
+ư, ơ, mờ, ươm. bờ, ươm, bươm, sắc, bướm.
+o, a, nờ, oan. hờ, oan, hoan.
+o, a, ngờ, oang. hờ, oang, hoang.
+o, á, ngờ, oăng. hờ, oăng, hoăng, ngã, hoẵng.
+u, i, ê, nờ, uyên. thờ, uyên, thuyên.
+bờ, a, ba. bờ, an, ban. bờ, ang, bang.
+mờ, e, me. mờ, en, men. mờ, en, men, huyền, mèn.
+tờ, ô, tô. tờ, ôm, tôm. tờ, ôn, tôn.
+cờ, a, ca. cờ, am, cam. cờ, an, can.
+lờ, ơ, lơ. lờ, ơn, lơn, sắc, lớn. lờ, ơi, lơi.
+mờ, ăng, măng. mờ, ăng, măng, sắc, mắng.
+gờ, a, ga, huyền, gà. gờ, a, ga, sắc, gá. gờ, a, ga, hỏi, gả.
+ma, huyền, mà. ma, sắc, má. ma, hỏi, mả. ma, ngã, mã. ma, nặng, mạ.
+ba, huyền, bà. ba, sắc, bá. ba, hỏi, bả. ba, ngã, bã. ba, nặng, bạ.
+co, huyền, cò. co, sắc, có. co, hỏi, cỏ. co, ngã, cõ. co, nặng, cọ.
+la, huyền, là. la, sắc, lá. la, hỏi, lả. la, ngã, lã. la, nặng, lạ.
