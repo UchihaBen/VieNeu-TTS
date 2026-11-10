@@ -69,6 +69,9 @@ def main() -> None:
     ap.add_argument("--min-sec", type=float, default=3.0)
     ap.add_argument("--max-sec", type=float, default=15.0, help="longer clips are skipped (split them first)")
     ap.add_argument("--base", default="pnnbao-ump/VieNeu-TTS-v3-Turbo", help="model repo (codec + speaker encoder)")
+    ap.add_argument("--allow-shared-last-code", action="store_true",
+                    help="build even if most rows end with the same codebook-0 value that is NOT the "
+                         "codec's silence frame (only when you have checked the clips end cleanly)")
     args = ap.parse_args()
 
     ds_dir = safe_path(args.dataset_dir)
@@ -114,6 +117,19 @@ def main() -> None:
     last = Counter(x["codes"][-1][0] for x in recs)
     code, n_same = last.most_common(1)[0]
     if len(recs) >= 20 and n_same / len(recs) > 0.5:
+        # Synthetic or studio clips that all end in clean silence also share a
+        # last code: the codec's silence frame. That is harmless (the model learns
+        # to finish on silence), unlike the #198 artifact, so tell them apart by
+        # encoding silence with the same encoder.
+        sr_enc = getattr(eng, "SAMPLE_RATE", 48000)
+        sil = np.asarray(eng._encode_ref_wav(np.zeros(int(sr_enc * 0.48), dtype=np.float32), sr_enc))
+        silence_codes = {int(c) for c in sil[:, 0]}
+        print(f"  last codebook-0 = {code} on {n_same}/{len(recs)} rows; codec silence frame(s): {sorted(silence_codes)}")
+        if code in silence_codes or args.allow_shared_last_code:
+            why = "it is the codec's silence frame" if code in silence_codes else "--allow-shared-last-code"
+            print(f"  accepted: {why}.")
+            code = None
+    if code is not None and len(recs) >= 20 and n_same / len(recs) > 0.5:
         raise SystemExit(f"{n_same}/{len(recs)} rows end with codebook-0 = {code}: the encoder is appending a "
                          f"pad frame (issue #198). Update vieneu and rebuild — training on this teaches the "
                          f"model to say that frame after every sentence.")
