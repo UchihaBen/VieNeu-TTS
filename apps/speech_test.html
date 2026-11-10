@@ -15,7 +15,7 @@ button.ghost{background:transparent;color:var(--err);border:1px solid var(--line
 button:disabled{opacity:.6;cursor:wait}.status{margin-top:10px;color:var(--muted)}.status.err{color:var(--err)}.status.ok{color:var(--ok)}
 audio{width:100%;margin-top:12px}a{color:var(--acc)}details summary{cursor:pointer;color:var(--muted);font-size:13px;margin-top:12px}
 </style></head><body><main>
-<h1>VieNeu-TTS API</h1><p class="sub">Trang nghe thử. Tài liệu API: <a href="/docs">/docs</a></p>
+<h1>VieNeu-TTS API</h1><p class="sub">Model đang chạy: <b id="model">…</b> · Tài liệu API: <a href="/docs">/docs</a></p>
 
 <div class="card">
   <label for="key">API key (nếu server có đặt VIENEU_API_KEY)</label>
@@ -132,4 +132,5 @@ $('del').onclick = async () => {
 };
 
 loadVoices();
+fetch('/health').then(r => r.json()).then(d => { $('model').textContent = d.model || '?' }).catch(() => { $('model').textContent = '?' });
 </script></body></html>

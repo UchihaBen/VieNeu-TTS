@@ -275,3 +275,17 @@ def test_pause_env_overrides_join_pauses(monkeypatch):
     monkeypatch.setenv("VIENEU_PAUSE_MINOR", "abc")          # ignored
     monkeypatch.setenv("VIENEU_PAUSE_PARA", "9")             # clamped
     assert api._apply_pause_env() == {"para": 2.0, "sentence": 0.3, "minor": 0.30}
+
+
+@pytest.mark.parametrize("backbone, label", [
+    (None, "base (VieNeu-TTS-v3-Turbo)"),
+    ("finetune/output/ban_mai_v3/merged", "ban_mai_v3"),
+    ("finetune/output/ban_mai_v3/merged/", "ban_mai_v3"),
+    ("someone/VieNeu-TTS-v3-Turbo-my-voice", "VieNeu-TTS-v3-Turbo-my-voice"),
+])
+def test_model_label(backbone, label):
+    assert api._model_label(backbone) == label
+
+
+def test_health_reports_model(client, eng):
+    assert client.get("/health").json()["model"] == eng.model_label

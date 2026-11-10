@@ -54,6 +54,7 @@ Environment:
     VIENEU_MAX_CHARS=256  (default text chunk length; ~120 suits a model fine-tuned on short clips)
     VIENEU_PAUSE_SENTENCE=0.50 VIENEU_PAUSE_MINOR=0.30 VIENEU_PAUSE_PARA=0.70  (minimum pause
                         where chunks are joined: after .!? / after ,;: / at a line break)
+    VIENEU_MODEL_LABEL=...  (name shown in /health and on the test page; default from VIENEU_BACKBONE)
     VIENEU_EDU_NORMALIZE=1  (classroom text fixes: 12 : 4 -> chia, 1/2 -> một phần hai,
                         3,14 -> ba phẩy mười bốn, Roman numerals; per request: edu_normalize)
     VIENEU_WATERMARK=1                 HOST=127.0.0.1  PORT=8000
@@ -139,6 +140,7 @@ class Engine:
         backbone = os.environ.get("VIENEU_BACKBONE")
         if backbone:
             kw["backbone_repo"] = backbone
+        self.model_label = os.environ.get("VIENEU_MODEL_LABEL") or _model_label(backbone)
         log.info("⏸ pauses between chunks (s): %s", _apply_pause_env())
         log.info("⏳ loading VieNeu-TTS v3 Turbo (backend=%s device=%s model=%s)", backend, device,
                  backbone or "pnnbao-ump/VieNeu-TTS-v3-Turbo")
@@ -313,6 +315,16 @@ class _SpeechResponse(StreamingResponse):
 
 
 ENGINE: Optional[Engine] = None
+
+
+def _model_label(backbone: Optional[str]) -> str:
+    """Short name shown in /health and on the test page: finetune/output/ban_mai_v3/merged -> ban_mai_v3."""
+    if not backbone:
+        return "base (VieNeu-TTS-v3-Turbo)"
+    parts = [x for x in re.split(r"[\/]+", backbone.rstrip("/\\")) if x]
+    if len(parts) >= 2 and parts[-1] in ("merged", "update"):
+        return parts[-2]
+    return parts[-1] if parts else backbone
 
 
 def engine() -> Engine:
@@ -611,7 +623,7 @@ def test_page():
 @app.get("/health")
 def health():
     eng = engine()
-    body = {"status": "ok", "backend": eng.backend, "max_streams": eng.max_streams,
+    body = {"status": "ok", "model": eng.model_label, "backend": eng.backend, "max_streams": eng.max_streams,
             "active": eng.active, "waiting": eng.waiting, "sample_rate": SAMPLE_RATE}
     err = eng.stream_error()
     if err is not None:
