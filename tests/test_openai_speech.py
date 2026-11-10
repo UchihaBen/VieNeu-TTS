@@ -239,3 +239,15 @@ def test_edu_normalize_on_by_default(client, eng, monkeypatch):
     monkeypatch.setenv("VIENEU_EDU_NORMALIZE", "0")
     assert _speech(client, input="1/2").status_code == 200
     assert eng.tts.stream_texts == ["12 chia 4 = 3 và 1 phần 2", "12 : 4 = 3", "1/2"]
+
+
+def test_backbone_env_selects_finetuned_model(monkeypatch):
+    seen = {}
+    monkeypatch.setattr(api, "Vieneu", lambda **kw: seen.update(kw) or FakeTTS())
+    monkeypatch.setenv("VIENEU_BACKBONE", "finetune/output/ban_mai_v1/merged")
+    api.Engine()
+    assert seen["backbone_repo"] == "finetune/output/ban_mai_v1/merged"
+    monkeypatch.delenv("VIENEU_BACKBONE")
+    seen.clear()
+    api.Engine()
+    assert "backbone_repo" not in seen

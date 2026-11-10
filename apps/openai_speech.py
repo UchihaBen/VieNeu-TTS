@@ -50,6 +50,7 @@ Environment:
                         HOST is not a loopback address)
     VIENEU_VOICES_FILE=voices/custom_voices.json  (where POST /v1/voices
                         persists cloned voices; reloaded at startup)
+    VIENEU_BACKBONE=finetune/output/<run>/merged  (serve a fine-tuned model; GPU/PyTorch only)
     VIENEU_EDU_NORMALIZE=1  (classroom text fixes: 12 : 4 -> chia, 1/2 -> một phần hai,
                         3,14 -> ba phẩy mười bốn, Roman numerals; per request: edu_normalize)
     VIENEU_WATERMARK=1                 HOST=127.0.0.1  PORT=8000
@@ -112,7 +113,12 @@ class Engine:
                         precision=os.environ.get("VIENEU_PRECISION", "fp32"),
                         onnx_dir=os.environ.get("VIENEU_ONNX_DIR") or None,
                         max_streams=_env_int("VIENEU_MAX_STREAMS", 16))
-        log.info("⏳ loading VieNeu-TTS v3 Turbo (backend=%s device=%s)", backend, device)
+        # A fine-tuned model (finetune/output/<run>/merged, or a Hub repo id).
+        backbone = os.environ.get("VIENEU_BACKBONE")
+        if backbone:
+            kw["backbone_repo"] = backbone
+        log.info("⏳ loading VieNeu-TTS v3 Turbo (backend=%s device=%s model=%s)", backend, device,
+                 backbone or "pnnbao-ump/VieNeu-TTS-v3-Turbo")
         t = time.perf_counter()
         self.tts = Vieneu(mode="v3turbo", **kw)
         self.backend = self.tts.backend

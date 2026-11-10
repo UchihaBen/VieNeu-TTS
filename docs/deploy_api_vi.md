@@ -39,6 +39,7 @@ Một số biến môi trường hay dùng:
 | `VIENEU_API_KEY` | (trống = không khoá) | Client gửi `Authorization: Bearer <key>` |
 | `VIENEU_MAX_STREAMS` | `16` | Số request chạy song song trên GPU |
 | `VIENEU_VOICES_FILE` | `voices/custom_voices.json` | Nơi lưu giọng clone |
+| `VIENEU_BACKBONE` | (model gốc) | Thư mục model đã fine-tune, ví dụ `finetune/output/ban_mai_v1/merged` (chỉ chạy GPU) |
 | `VIENEU_EDU_NORMALIZE` | `1` | Chuẩn hoá chữ cho lớp học: `12 : 4` → chia, `1/2` → một phần hai, `3,14` → ba phẩy mười bốn, số La Mã. Tắt từng request bằng `"edu_normalize": false` |
 | `VIENEU_WATERMARK` | `1` | `0` để tắt watermark âm thanh |
 
