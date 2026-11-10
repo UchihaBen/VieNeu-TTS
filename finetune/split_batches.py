@@ -117,6 +117,9 @@ def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--dataset-dir", default=str(ROOT / "finetune" / "dataset"))
     ap.add_argument("--prompts", default=str(ROOT / "finetune" / "prompts" / "cau_mau_vi.txt"))
+    ap.add_argument("--extra", nargs=2, action="append", default=[], metavar=("PROMPTS", "PREFIX"),
+                    help="prompt list for batches named batch_<PREFIX>0001_N.mp3 (repeatable), "
+                         "e.g. --extra finetune/prompts/lop_hoc_vi.txt lh_")
     ap.add_argument("--model", default="openai/whisper-large-v3-turbo")
     ap.add_argument("--force", action="store_true", help="re-split even if the clips already exist")
     args = ap.parse_args()
@@ -131,19 +134,25 @@ def main() -> None:
 
     ds = Path(args.dataset_dir)
     out_dir = ds / "raw_audio"
-    prompts = [l.strip() for l in Path(args.prompts).read_text(encoding="utf-8-sig").splitlines()
-               if l.strip() and not l.strip().startswith("#")]
+    def read(path):
+        return [l.strip() for l in Path(path).read_text(encoding="utf-8-sig").splitlines()
+                if l.strip() and not l.strip().startswith("#")]
+
+    prompt_sets = {"": read(args.prompts), **{pre: read(p) for p, pre in args.extra}}
     batches = sorted(p for p in (ds / "_batches").glob("batch_*.mp3") if BATCH_RE.match(p.name))
     jobs = []
     for p in batches:
         m = BATCH_RE.match(p.name)
         first, n, prefix = int(m["num"]), int(m["n"]), m["prefix"]
+        if prefix not in prompt_sets:
+            print(f"   skip {p.name}: no prompt list for prefix {prefix!r} (pass --extra PROMPTS {prefix})")
+            continue
         lines = list(range(first, first + n))
         stems = [f"{prefix}{i:04d}" for i in lines]
         have = all(any((out_dir / f"{s}{e}").is_file() for e in AUDIO_EXTS) for s in stems)
         if have and not args.force:
             continue
-        jobs.append((p, lines, stems))
+        jobs.append((p, lines, stems, prompt_sets[prefix]))
     print(f"{len(batches)} batch recordings, {len(jobs)} to split")
     if not jobs:
         return
@@ -153,7 +162,7 @@ def main() -> None:
                    torch_dtype=torch.float16 if cuda else torch.float32, device=0 if cuda else -1)
 
     ok = bad = 0
-    for p, lines, stems in jobs:
+    for p, lines, stems, prompts in jobs:
         x = load(p)
         hyp = word_times(asr, librosa.resample(x, orig_sr=SR, target_sr=16000))
         ref_sents = [normalize(prompts[i - 1]) for i in lines]

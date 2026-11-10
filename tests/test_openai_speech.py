@@ -223,3 +223,19 @@ def test_open_public_bind_is_logged(monkeypatch, caplog):
     with caplog.at_level(logging.WARNING, logger="vieneu.api"):
         api.main()
     assert "without VIENEU_API_KEY" in caplog.text
+
+
+def test_edu_normalize_on_by_default(client, eng, monkeypatch):
+    monkeypatch.delenv("VIENEU_EDU_NORMALIZE", raising=False)
+    eng.tts.stream_texts = []
+    orig = eng.tts.infer_stream
+
+    def spy(text, **kw):
+        eng.tts.stream_texts.append(text)
+        return orig(text, **kw)
+    monkeypatch.setattr(eng.tts, "infer_stream", spy)
+    assert _speech(client, input="12 : 4 = 3 và 1/2").status_code == 200
+    assert _speech(client, input="12 : 4 = 3", edu_normalize=False).status_code == 200
+    monkeypatch.setenv("VIENEU_EDU_NORMALIZE", "0")
+    assert _speech(client, input="1/2").status_code == 200
+    assert eng.tts.stream_texts == ["12 chia 4 = 3 và 1 phần 2", "12 : 4 = 3", "1/2"]

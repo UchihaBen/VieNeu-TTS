@@ -50,6 +50,8 @@ Environment:
                         HOST is not a loopback address)
     VIENEU_VOICES_FILE=voices/custom_voices.json  (where POST /v1/voices
                         persists cloned voices; reloaded at startup)
+    VIENEU_EDU_NORMALIZE=1  (classroom text fixes: 12 : 4 -> chia, 1/2 -> một phần hai,
+                        3,14 -> ba phẩy mười bốn, Roman numerals; per request: edu_normalize)
     VIENEU_WATERMARK=1                 HOST=127.0.0.1  PORT=8000
                                        (HOST=0.0.0.0 to serve other machines; the
                                        Docker profiles set it)
@@ -80,6 +82,8 @@ from fastapi.responses import HTMLResponse, JSONResponse, StreamingResponse
 from pydantic import BaseModel, Field
 
 from vieneu import Vieneu
+
+from apps.edu_text import normalize_edu
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
 log = logging.getLogger("vieneu.api")
@@ -380,6 +384,8 @@ class SpeechRequest(BaseModel):
     top_p: float = Field(0.95, gt=0.0, le=1.0, allow_inf_nan=False)
     repetition_penalty: float = Field(1.2, ge=1.0, le=2.0, allow_inf_nan=False)
     max_chars: int = Field(256, ge=64, le=512)
+    # Classroom text fixes (apps/edu_text.py); None = server default (VIENEU_EDU_NORMALIZE).
+    edu_normalize: Optional[bool] = None
 
 
 def _speech_chunks(eng: Engine, req: SpeechRequest, rid: str, slot: _Slot) -> Iterator[np.ndarray]:
@@ -388,8 +394,10 @@ def _speech_chunks(eng: Engine, req: SpeechRequest, rid: str, slot: _Slot) -> It
     first = None
     emitted = 0
     rs = _Resampler(req.sample_rate)
+    edu = req.edu_normalize if req.edu_normalize is not None else os.environ.get("VIENEU_EDU_NORMALIZE", "1") != "0"
+    text = normalize_edu(req.input) if edu else req.input
     audio = eng.tts.infer_stream(
-        req.input, voice=req.voice or None, apply_watermark=eng.watermark,
+        text, voice=req.voice or None, apply_watermark=eng.watermark,
         temperature=req.temperature, top_k=req.top_k, top_p=req.top_p,
         repetition_penalty=req.repetition_penalty, max_chars=req.max_chars,
     )
