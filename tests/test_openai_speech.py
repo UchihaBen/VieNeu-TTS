@@ -50,6 +50,7 @@ def eng(monkeypatch, tmp_path):
     for var in ("VIENEU_API_KEY", "VIENEU_MAX_STREAMS", "VIENEU_QUEUE"):
         monkeypatch.delenv(var, raising=False)
     monkeypatch.setenv("VIENEU_VOICES_FILE", str(tmp_path / "voices" / "custom_voices.json"))
+    monkeypatch.setenv("VIENEU_STT", "0")    # tests/test_stt.py covers speech-to-text with a fake model
     monkeypatch.setattr(api, "Vieneu", lambda **kw: FakeTTS())
     e = api.Engine()
     monkeypatch.setattr(api, "ENGINE", e)

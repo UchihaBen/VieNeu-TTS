@@ -57,9 +57,17 @@ Environment:
     VIENEU_MODEL_LABEL=...  (name shown in /health and on the test page; default from VIENEU_BACKBONE)
     VIENEU_EDU_NORMALIZE=1  (classroom text fixes: 12 : 4 -> chia, 1/2 -> một phần hai,
                         3,14 -> ba phẩy mười bốn, Roman numerals; per request: edu_normalize)
+    VIENEU_STT=1  VIENEU_STT_DIR=...  VIENEU_STT_THREADS=4   (speech-to-text, see below)
     VIENEU_WATERMARK=1                 HOST=127.0.0.1  PORT=8000
                                        (HOST=0.0.0.0 to serve other machines; the
                                        Docker profiles set it)
+
+Speech-to-text (Vietnamese, CPU, apps/stt.py): ``POST /v1/audio/transcriptions``,
+multipart like OpenAI's — ``file`` (≤ 20 MB, ≤ 120 s), ``response_format`` json
+(default, {"text": ...}) | text | verbose_json (+ duration, inference_seconds),
+``language`` empty or "vi", ``model`` ignored. Needs
+``uv pip install sherpa-onnx sherpa-onnx-core``; if the model cannot load, the
+server starts without it (/health "stt": false, the endpoint answers 503).
 """
 from __future__ import annotations
 
@@ -83,11 +91,12 @@ import numpy as np
 import uvicorn
 from fastapi import Depends, FastAPI, File, Form, Header, HTTPException, Request, UploadFile
 from fastapi.exceptions import RequestValidationError
-from fastapi.responses import HTMLResponse, JSONResponse, StreamingResponse
+from fastapi.responses import HTMLResponse, JSONResponse, PlainTextResponse, StreamingResponse
 from pydantic import BaseModel, Field
 
 from vieneu import Vieneu
 
+from apps import stt as stt_mod
 from apps.edu_text import normalize_edu
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
@@ -366,9 +375,30 @@ async def _invalid_request(_req: Request, exc: RequestValidationError):
     return _error(400, f"{field}: {msg}" if field else msg)
 
 
+STT: Optional[stt_mod.STT] = None
+
+
+def _load_stt() -> None:
+    """Load speech-to-text; any failure only disables it, TTS still starts."""
+    global STT
+    if os.environ.get("VIENEU_STT", "1") == "0":
+        log.info("speech-to-text off (VIENEU_STT=0)")
+        return
+    try:
+        t0 = time.perf_counter()
+        STT = stt_mod.load(model_dir=os.environ.get("VIENEU_STT_DIR") or None,
+                           threads=_env_int("VIENEU_STT_THREADS", 4))
+        log.info("speech-to-text ready (%s, %.1f s)", stt_mod.MODEL_ID, time.perf_counter() - t0)
+    except Exception as e:   # noqa: BLE001 — ImportError included: sherpa-onnx is optional
+        STT = None
+        log.warning("speech-to-text disabled, model failed to load: %r "
+                    "(uv pip install sherpa-onnx sherpa-onnx-core)", e)
+
+
 @app.on_event("startup")
 def _startup() -> None:
     engine()
+    _load_stt()
 
 
 # ── audio helpers ────────────────────────────────────────────────────────────
@@ -539,7 +569,11 @@ def models():
         "sample_rate": SAMPLE_RATE, "backend": eng.backend,
         "max_streams": eng.max_streams, "response_formats": ["pcm", "wav"],
         "stream_formats": ["audio", "sse"], "sample_rates": list(RATES),
-    }]}
+    }] + ([{
+        "id": stt_mod.MODEL_ID, "object": "model", "created": 0, "owned_by": "g-group-ai-lab",
+        "task": "transcription", "languages": ["vi"],
+        "response_formats": ["json", "text", "verbose_json"],
+    }] if STT is not None else [])}
 
 
 @app.get("/v1/voices", dependencies=[Depends(_auth)])
@@ -610,6 +644,43 @@ def delete_voice(name: str):
     return {"id": name, "deleted": True}
 
 
+@app.post("/v1/audio/transcriptions", dependencies=[Depends(_auth)])
+def transcriptions(file: UploadFile = File(...), model: Optional[str] = Form(None),
+                   language: Optional[str] = Form(None), response_format: str = Form("json")):
+    """Vietnamese speech-to-text, OpenAI-compatible (``model`` is ignored).
+
+    Plain ``def``: decoding blocks a CPU for up to seconds, so FastAPI runs it in
+    a worker thread and TTS streams on the event loop keep flowing.
+    """
+    if STT is None:
+        raise HTTPException(503, "speech-to-text is not available on this server (see startup log)")
+    if language and language.strip().lower() not in ("vi", "vi-vn"):
+        raise HTTPException(400, "language: only Vietnamese is supported (vi)")
+    fmt = (response_format or "json").lower()
+    if fmt not in ("json", "text", "verbose_json"):
+        raise HTTPException(400, "response_format: one of json, text, verbose_json")
+    data = file.file.read(stt_mod.MAX_BYTES + 1)
+    if len(data) > stt_mod.MAX_BYTES:
+        raise HTTPException(413, "audio file larger than 20 MB")
+    try:
+        x = stt_mod.decode_16k(data, os.path.splitext(file.filename or "")[1].lower())
+    except stt_mod.AudioError as e:
+        raise HTTPException(400, str(e))
+    duration = len(x) / stt_mod.SAMPLE_RATE
+    t0 = time.perf_counter()
+    text = STT.transcribe(x)
+    elapsed = time.perf_counter() - t0
+    log.info("stt %.1f s audio in %.2f s", duration, elapsed)
+    headers = {"X-Inference-Seconds": f"{elapsed:.3f}", "X-Audio-Seconds": f"{duration:.2f}"}
+    if fmt == "text":
+        return PlainTextResponse(text, headers=headers)
+    body = {"text": text}
+    if fmt == "verbose_json":
+        body.update(task="transcribe", language="vietnamese", model=stt_mod.MODEL_ID,
+                    duration=round(duration, 2), inference_seconds=round(elapsed, 3))
+    return JSONResponse(body, headers=headers)
+
+
 _TEST_PAGE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "speech_test.html")
 
 
@@ -624,7 +695,8 @@ def test_page():
 def health():
     eng = engine()
     body = {"status": "ok", "model": eng.model_label, "backend": eng.backend, "max_streams": eng.max_streams,
-            "active": eng.active, "waiting": eng.waiting, "sample_rate": SAMPLE_RATE}
+            "active": eng.active, "waiting": eng.waiting, "sample_rate": SAMPLE_RATE,
+            "stt": STT is not None}
     err = eng.stream_error()
     if err is not None:
         # 503 so a container healthcheck restarts us: the scheduler does not recover.
