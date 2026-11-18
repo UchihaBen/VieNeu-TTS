@@ -52,6 +52,17 @@ audio{width:100%;margin-top:12px}a{color:var(--acc)}details summary{cursor:point
   <button id="del" class="ghost">Xoá giọng đang chọn</button>
   <div id="cstatus" class="status"></div>
 </div>
+
+<div class="card" id="sttCard" hidden>
+  <h2>Nhận dạng giọng nói (STT)</h2>
+  <p class="sub" style="margin:0">Tiếng Việt, tối đa 120 giây. Ghi âm từ micro, chọn file, hoặc cho STT nghe lại câu vừa tạo ở trên.</p>
+  <button id="rec">🎙 Ghi âm</button>
+  <button id="again" class="ghost" style="color:var(--acc)" disabled>Nghe lại câu vừa tạo</button>
+  <label for="sfile">Hoặc chọn file audio (wav, mp3, flac, ogg)</label><input id="sfile" type="file" accept="audio/*">
+  <div id="sstatus" class="status"></div>
+  <audio id="splayer" controls hidden></audio>
+  <label for="stext">Kết quả</label><textarea id="stext" readonly style="min-height:90px"></textarea>
+</div>
 </main>
 <script>
 const $ = id => document.getElementById(id);
@@ -100,7 +111,8 @@ $('go').onclick = async () => {
     if (!r.ok) throw new Error(await errText(r));
     const rate = +(r.headers.get('X-Sample-Rate') || 48000);
     const pcm = await r.arrayBuffer();
-    const url = URL.createObjectURL(pcmToWav(pcm, rate));
+    lastWav = pcmToWav(pcm, rate); $('again').disabled = false;
+    const url = URL.createObjectURL(lastWav);
     $('player').src = url; $('player').hidden = false; $('player').play().catch(() => {});
     $('dl').innerHTML = `<a href="${url}" download="vieneu.wav">Tải file WAV</a>`;
     const secs = (performance.now() - t0) / 1000, dur = pcm.byteLength / 2 / rate;
@@ -131,6 +143,64 @@ $('del').onclick = async () => {
   await loadVoices(); say($('cstatus'), `Đã xoá giọng "${name}".`, 'ok');
 };
 
+// ── speech-to-text ──
+let lastWav = null;
+async function transcribe(blob, name) {
+  const f = new FormData(); f.append('file', blob, name); f.append('response_format', 'verbose_json');
+  say($('sstatus'), 'Đang nhận dạng…'); $('stext').value = ''; const t0 = performance.now();
+  try {
+    const r = await fetch('/v1/audio/transcriptions', {method: 'POST', headers: auth(), body: f});
+    if (!r.ok) throw new Error(await errText(r));
+    const d = await r.json();
+    $('stext').value = d.text || '(không nghe thấy lời nói)';
+    say($('sstatus'), `Xong sau ${((performance.now() - t0) / 1000).toFixed(1)} giây · audio ${d.duration} giây · model xử lý ${d.inference_seconds} giây`, 'ok');
+  } catch (e) { say($('sstatus'), 'Lỗi: ' + e.message, 'err') }
+}
+
+// Mic -> raw samples -> 16 kHz WAV in the browser: small upload, no ffmpeg needed on the server.
+let recState = null;
+async function startRec() {
+  const stream = await navigator.mediaDevices.getUserMedia({audio: {channelCount: 1, echoCancellation: true, noiseSuppression: true}});
+  const ctx = new (window.AudioContext || window.webkitAudioContext)();
+  const src = ctx.createMediaStreamSource(stream), node = ctx.createScriptProcessor(4096, 1, 1), chunks = [];
+  node.onaudioprocess = e => chunks.push(new Float32Array(e.inputBuffer.getChannelData(0)));
+  src.connect(node); node.connect(ctx.destination);
+  recState = {stream, ctx, node, src, chunks, t0: performance.now()};
+  recState.timer = setInterval(() => {
+    const s = (performance.now() - recState.t0) / 1000;
+    say($('sstatus'), `Đang ghi… ${s.toFixed(0)} giây (bấm lại để dừng)`);
+    if (s >= 118) stopRec();
+  }, 250);
+  $('rec').textContent = '⏹ Dừng và nhận dạng';
+}
+function stopRec() {
+  const {stream, ctx, node, src, chunks, timer} = recState; recState = null; clearInterval(timer);
+  src.disconnect(); node.disconnect(); stream.getTracks().forEach(t => t.stop());
+  const rate = ctx.sampleRate; ctx.close();
+  $('rec').textContent = '🎙 Ghi âm';
+  const n = chunks.reduce((a, c) => a + c.length, 0), x = new Float32Array(n);
+  let o = 0; for (const c of chunks) { x.set(c, o); o += c.length }
+  const ratio = rate / 16000, m = Math.floor(n / ratio), pcm = new Int16Array(m);
+  for (let i = 0; i < m; i++) {           // average each 16 kHz step's input samples (cheap anti-alias)
+    const a = Math.floor(i * ratio), b = Math.max(a + 1, Math.floor((i + 1) * ratio));
+    let s = 0; for (let j = a; j < b; j++) s += x[j]; s /= (b - a);
+    pcm[i] = Math.max(-32768, Math.min(32767, s * 32767));
+  }
+  const wav = pcmToWav(pcm.buffer, 16000);
+  $('splayer').src = URL.createObjectURL(wav); $('splayer').hidden = false;
+  transcribe(wav, 'mic.wav');
+}
+$('rec').onclick = async () => {
+  if (recState) { stopRec(); return }
+  try { await startRec() } catch (e) { say($('sstatus'), 'Không mở được micro: ' + e.message, 'err') }
+};
+$('again').onclick = () => { if (lastWav) { $('splayer').src = URL.createObjectURL(lastWav); $('splayer').hidden = false; transcribe(lastWav, 'tts.wav') } };
+$('sfile').onchange = () => {
+  const file = $('sfile').files[0]; if (!file) return;
+  $('splayer').src = URL.createObjectURL(file); $('splayer').hidden = false;
+  transcribe(file, file.name);
+};
+
 loadVoices();
-fetch('/health').then(r => r.json()).then(d => { $('model').textContent = d.model || '?' }).catch(() => { $('model').textContent = '?' });
+fetch('/health').then(r => r.json()).then(d => { $('model').textContent = d.model || '?'; $('sttCard').hidden = !d.stt }).catch(() => { $('model').textContent = '?' });
 </script></body></html>
